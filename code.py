@@ -2,10 +2,11 @@
 
 import streamlit as st
 import pandas as pd
-from Bio import SeqIO
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
+import io
+from Bio import SeqIO
 
 # ------------------ Helper Functions ------------------
 
@@ -39,6 +40,9 @@ def calculate_similarity_score(detected_motifs, known_motifs):
     return round((match_count / (sum(len(v) for v in known_motifs.values()) + 1)) * 100, 2)
 
 # ------------------ Streamlit UI ------------------
+
+st.set_page_config(page_title="DNA Motif Biomarker Predictor", layout="wide")
+
 st.title("🔬 DNA Structural Motif-Based Biomarker Prediction")
 st.markdown("""
 This tool analyzes **cis-regulatory DNA sequences** for **non-B DNA motifs** associated with diseases such as cancer, Alzheimer's, etc.
@@ -56,44 +60,10 @@ known_disease_motifs = {
 }
 
 if uploaded_file:
-    fasta_sequences = SeqIO.parse(uploaded_file, "fasta")
-    for record in fasta_sequences:
-        st.subheader(f"🧬 Analyzing: {record.id}")
-        sequence = str(record.seq)
+    try:
+        # Decode binary to text for BioPython
+        stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
+        fasta_sequences = SeqIO.parse(stringio, "fasta")
 
-        # Detect motifs
-        motifs = {
-            "G4": detect_g_quadruplex(sequence),
-            "Z-DNA": detect_z_dna(sequence),
-            "Cruciform": detect_cruciform(sequence),
-            "Triplex": detect_triplex(sequence)
-        }
-
-        st.markdown("### 🧪 Detected Motifs")
-        for motif, positions in motifs.items():
-            st.write(f"**{motif}:** {len(positions)} regions found")
-
-        # Plot heatmap of motif positions
-        st.markdown("### 📊 Motif Density Plot")
-        motif_density = [0] * len(sequence)
-        for positions in motifs.values():
-            for start, end in positions:
-                for i in range(start, min(end, len(sequence))):
-                    motif_density[i] += 1
-        fig, ax = plt.subplots()
-        ax.plot(motif_density)
-        ax.set_xlabel("Position")
-        ax.set_ylabel("Motif Count")
-        ax.set_title("Motif Density Across Sequence")
-        st.pyplot(fig)
-
-        # Compare with known disease motifs
-        similarity = calculate_similarity_score(motifs, known_disease_motifs)
-        st.markdown(f"### 🧠 Disease Likelihood Score: **{similarity}%** match with known disease motifs")
-
-        if similarity > 70:
-            st.success("High similarity to known disease-associated promoters.")
-        elif similarity > 40:
-            st.warning("Moderate similarity. Experimental validation recommended.")
-        else:
-            st.info("Low similarity to known disease motifs.")
+        for record in fasta_sequences:
+            st.subheader(f"🧬 Analyzing: {record.id}")
