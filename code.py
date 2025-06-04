@@ -1,27 +1,20 @@
-# DNA Structural Motif-Based Biomarker Platform (Prototype in Python)
-
 import streamlit as st
 import pandas as pd
 from Bio import SeqIO
 import matplotlib.pyplot as plt
-import seaborn as sns
 import re
 
 # ------------------ Helper Functions ------------------
 
 def detect_g_quadruplex(seq):
-    """Detects potential G-quadruplex motifs."""
     pattern = r'(G{3,}\w{1,7}){3,}G{3,}'
     return [(m.start(), m.end()) for m in re.finditer(pattern, str(seq))]
 
 def detect_z_dna(seq):
-    """Detect Z-DNA potential zones (CG repeats)."""
     pattern = r'(CG){6,}'
     return [(m.start(), m.end()) for m in re.finditer(pattern, str(seq))]
 
 def detect_cruciform(seq):
-    """Detect potential inverted repeats forming cruciforms."""
-    # Simple heuristic for palindromic sequences of at least 4 bases
     results = []
     for i in range(len(seq) - 8):
         left = seq[i:i+4]
@@ -31,12 +24,10 @@ def detect_cruciform(seq):
     return results
 
 def detect_triplex(seq):
-    """Detect potential homopurine stretches for triplex formation."""
     pattern = r'[AG]{10,}'
     return [(m.start(), m.end()) for m in re.finditer(pattern, str(seq))]
 
 def calculate_similarity_score(detected_motifs, known_motifs):
-    """Simple overlap-based similarity score between query and known disease motifs."""
     match_count = 0
     for motif_type in detected_motifs:
         for m1 in detected_motifs[motif_type]:
@@ -45,15 +36,14 @@ def calculate_similarity_score(detected_motifs, known_motifs):
     return round((match_count / (sum(len(v) for v in known_motifs.values()) + 1)) * 100, 2)
 
 # ------------------ Streamlit UI ------------------
+
 st.title("🔬 DNA Structural Motif-Based Biomarker Prediction")
 st.markdown("""
 This tool analyzes **cis-regulatory DNA sequences** for **non-B DNA motifs** associated with diseases such as cancer, Alzheimer's, etc.
 """)
 
-# Upload FASTA file
-uploaded_file = st.file_uploader("📂 Upload your promoter sequence in FASTA format:", type=["fasta", "fa", "fna"])
+uploaded_file = st.file_uploader("📂 Upload your promoter sequence file (any format):")
 
-# Load known disease motifs (mocked for now)
 known_disease_motifs = {
     "G4": [(100, 120), (300, 320)],
     "Z-DNA": [(150, 165)],
@@ -63,12 +53,26 @@ known_disease_motifs = {
 
 if uploaded_file:
     try:
-        fasta_sequences = SeqIO.parse(uploaded_file, "fasta")
-        for record in fasta_sequences:
-            st.subheader(f"🧬 Analyzing: {record.id}")
-            sequence = str(record.seq)
+        # Attempt to parse as FASTA, fallback if fails
+        try:
+            fasta_sequences = SeqIO.parse(uploaded_file, "fasta")
+            records = list(fasta_sequences)
+            if not records:
+                raise ValueError("No sequences found in FASTA format.")
+        except Exception:
+            # Not fasta, try to read as plain text sequence
+            uploaded_file.seek(0)
+            seq = uploaded_file.read().decode("utf-8").strip().replace("\n", "").replace(" ", "").upper()
+            records = [seq]
 
-            # Detect motifs
+        for idx, record in enumerate(records):
+            if hasattr(record, "id"):  # FASTA record
+                st.subheader(f"🧬 Analyzing: {record.id}")
+                sequence = str(record.seq)
+            else:  # plain sequence string
+                st.subheader(f"🧬 Analyzing: Sequence {idx+1}")
+                sequence = record
+
             motifs = {
                 "G4": detect_g_quadruplex(sequence),
                 "Z-DNA": detect_z_dna(sequence),
@@ -80,8 +84,6 @@ if uploaded_file:
             for motif, positions in motifs.items():
                 st.write(f"**{motif}:** {len(positions)} regions found")
 
-            # Plot heatmap of motif positions
-            st.markdown("### 📊 Motif Density Plot")
             motif_density = [0] * len(sequence)
             for positions in motifs.values():
                 for start, end in positions:
@@ -95,7 +97,6 @@ if uploaded_file:
             ax.set_title("Motif Density Across Sequence")
             st.pyplot(fig)
 
-            # Compare with known disease motifs
             similarity = calculate_similarity_score(motifs, known_disease_motifs)
             st.markdown(f"### 🧠 Disease Likelihood Score: **{similarity}%** match with known disease motifs")
 
@@ -104,7 +105,7 @@ if uploaded_file:
             elif similarity > 40:
                 st.warning("Moderate similarity. Experimental validation recommended.")
             else:
-                st.info("Low similarity to known disease motifs.")
+                st.info("Low similarity to known disease motifs")
 
     except Exception as e:
-        st.error(f"❌ Error while processing FASTA file: {e}")
+        st.error(f"❌ Error while processing file: {e}")
