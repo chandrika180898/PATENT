@@ -4,6 +4,46 @@ import re
 import math
 from sklearn.ensemble import RandomForestClassifier
 
+# ----------------------- Styling -----------------------
+st.set_page_config(page_title="DNA Sequence Analyzer", layout="wide")
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f0f2f6;
+        padding: 1rem;
+    }
+    .title {
+        text-align: center;
+        font-size: 2.5rem;
+        color: #2c3e50;
+        padding-bottom: 10px;
+    }
+    .section {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+    }
+    .stButton>button {
+        background-color: #4CAF50;
+        color: white;
+        border-radius: 10px;
+        padding: 0.5em 1em;
+        font-size: 1em;
+        border: none;
+    }
+    .stDownloadButton>button {
+        background-color: #e67e22;
+        color: white;
+        font-weight: bold;
+        border-radius: 10px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="title">🧬 Functional DNA Region Analyzer</div>', unsafe_allow_html=True)
+
 # ----------------------- Helper Functions -----------------------
 
 def calculate_perplexity(sequence, k=3):
@@ -23,7 +63,6 @@ def detect_z_dna(seq):
     pattern = r'(CG){6,}'
     return len(re.findall(pattern, seq))
 
-# Instead of an invalid regex, use a logic-based method for detecting inverted repeats (cruciform)
 def reverse_complement(seq):
     complement = str.maketrans('ATGCatgc', 'TACGtacg')
     return seq.translate(complement)[::-1]
@@ -33,8 +72,8 @@ def detect_cruciform(seq, min_len=4, max_len=6, spacer=10):
     seq = seq.upper()
     for size in range(min_len, max_len + 1):
         for i in range(len(seq) - 2 * size - spacer + 1):
-            left = seq[i:i+size]
-            right = seq[i+size+spacer:i+2*size+spacer]
+            left = seq[i:i + size]
+            right = seq[i + size + spacer:i + 2 * size + spacer]
             if reverse_complement(left) == right:
                 count += 1
     return count
@@ -57,61 +96,61 @@ def extract_features(seq):
         'length': len(seq)
     }
 
-# ----------------------- Streamlit App -----------------------
+# ----------------------- File Upload -----------------------
 
-st.title("📄 DNA Motif & Perplexity Analyzer from TXT File")
+with st.container():
+    st.markdown('<div class="section">', unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("📂 Upload a .txt file with DNA sequences", type=["txt"])
+    uploaded_file = st.file_uploader("📄 Upload a `.txt` file with DNA sequences (each line = 1 sequence)", type=["txt"])
 
-if uploaded_file:
-    st.success(f"✅ Uploaded: {uploaded_file.name}")
+    if uploaded_file:
+        st.success(f"✅ File uploaded: `{uploaded_file.name}`")
 
-    try:
         content = uploaded_file.read().decode("utf-8").strip().splitlines()
-    except Exception as e:
-        st.error(f"Error reading file: {e}")
-    
-    records = []
-    for i, line in enumerate(content):
-        line = line.strip()
-        if not line:
-            continue
-        # Accept either "ID sequence" (two tokens) or just a sequence.
-        parts = line.split()
-        if len(parts) >= 2:
-            seq_id = parts[0]
-            sequence = "".join(parts[1:])  # In case sequence was split by whitespace.
+
+        records = []
+        for i, line in enumerate(content):
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                seq_id = parts[0]
+                sequence = "".join(parts[1:])
+            else:
+                seq_id = f"Seq_{i+1}"
+                sequence = parts[0]
+            records.append((seq_id, sequence))
+
+        st.info(f"🔍 {len(records)} sequences detected")
+
+        feature_rows = []
+        for seq_id, sequence in records:
+            try:
+                features = extract_features(sequence)
+                features["ID"] = seq_id
+                feature_rows.append(features)
+            except Exception as e:
+                st.warning(f"⚠️ Error processing sequence {seq_id}: {e}")
+
+        if feature_rows:
+            df = pd.DataFrame(feature_rows)
+
+            clf = RandomForestClassifier()
+            dummy_data = df.drop(columns=["ID"])
+            clf.fit(dummy_data, [0] * len(df))
+
+            predictions = clf.predict(dummy_data)
+            df["Predicted_Region"] = predictions
+
+            st.subheader("🔬 Analysis Results")
+            st.dataframe(df, use_container_width=True)
+
+            csv = df.to_csv(index=False).encode("utf-8")
+            st.download_button("📥 Download Results as CSV", data=csv,
+                               file_name="DNA_Analysis_Results.csv", mime="text/csv")
         else:
-            seq_id = f"Seq_{i+1}"
-            sequence = parts[0]
-        records.append((seq_id, sequence))
+            st.warning("❗ No valid sequences found.")
 
-    st.info(f"🔍 Found {len(records)} sequences")
-
-    feature_rows = []
-    for seq_id, sequence in records:
-        try:
-            features = extract_features(sequence)
-            features["ID"] = seq_id
-            feature_rows.append(features)
-        except Exception as e:
-            st.error(f"Error processing sequence {seq_id}: {e}")
-
-    if feature_rows:
-        df = pd.DataFrame(feature_rows)
-
-        # Create a dummy classifier
-        clf = RandomForestClassifier()
-        dummy_data = df.drop(columns=["ID"])
-        clf.fit(dummy_data, [0] * len(df))  # Dummy training with label 0
-
-        predictions = clf.predict(dummy_data)
-        df["Predicted_Region"] = predictions
-
-        st.subheader("🔬 Analysis Results")
-        st.dataframe(df)
-
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Download Results as CSV", data=csv, file_name="txt_sequence_results.csv", mime="text/csv")
     else:
-        st.warning("No valid sequence records found.")
+        st.info("💡 Please upload a `.txt` file to begin.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
