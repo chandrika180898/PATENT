@@ -59,7 +59,7 @@ def extract_features(seq):
 # ----------------------- Sidebar Navigation -----------------------
 
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Upload & Analyze", "Results", "Download Report", "About", "Contact"])
+page = st.sidebar.radio("Go to", ["Home", "Upload & Analyze", "Results", "Download Report", "Contact"])
 
 # ----------------------- Home -----------------------
 
@@ -69,7 +69,6 @@ if page == "Home":
         This tool helps analyze DNA sequences from TXT files to identify **Non-B DNA motifs**,
         calculate sequence **perplexity**, and detect features like **G-quadruplex**, **Z-DNA**, **TATA boxes**, etc.
     """)
-    st.image("https://raw.githubusercontent.com/chandrika180898/cisregprediction/main/images/New%20Microsoft%20PowerPoint%20Presentation.jpg")
 
 # ----------------------- Upload & Analyze -----------------------
 
@@ -143,19 +142,6 @@ elif page == "Download Report":
         st.download_button("📥 Download Results as CSV", data=csv, file_name="txt_sequence_results.csv", mime="text/csv")
     else:
         st.warning("⚠️ No data to download. Please analyze sequences first.")
-
-# ----------------------- About -----------------------
-
-elif page == "About":
-    st.title("📘 About DNA Motif Analysis")
-    st.write("""
-    - **G-quadruplex:** Four guanine-rich tracts separated by loops.
-    - **Z-DNA:** Left-handed DNA helix, often in regulatory regions.
-    - **TATA Box:** Promoter element critical for transcription initiation.
-    - **Direct Repeats:** Tandem repeats of 3–6 nucleotide motifs.
-    - **Cruciforms:** Palindromic inverted repeats forming cross-shaped DNA.
-    - **Perplexity:** Sequence complexity metric based on k-mer entropy.
-    """)
 
 # ----------------------- Contact -----------------------
 
