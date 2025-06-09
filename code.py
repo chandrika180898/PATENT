@@ -4,60 +4,57 @@ import re
 import math
 from sklearn.ensemble import RandomForestClassifier
 
-# ----------------------- Page Configuration -----------------------
-st.set_page_config(page_title="DNA Analyzer", layout="wide")
+# ---------- Page Setup ----------
+st.set_page_config(page_title="Colorful DNA Analyzer", layout="wide")
 
-# ----------------------- Custom CSS Styling -----------------------
+# ---------- Full Color CSS ----------
 st.markdown("""
     <style>
     body {
-        background: linear-gradient(to bottom right, #ffecd2, #fcb69f);
+        background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+        font-family: 'Segoe UI', sans-serif;
     }
     .main {
-        background-color: #fff5f0;
+        background-color: rgba(255, 255, 255, 0.9);
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 0 25px rgba(0,0,0,0.1);
+        margin-top: 2rem;
     }
-    .title {
-        color: #6a1b9a;
+    h1, h2, h3 {
+        color: #4a148c;
         text-align: center;
-        font-size: 3em;
-        font-weight: bold;
-        margin-bottom: 20px;
     }
-    .section {
-        background-color: #ffffffdd;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-        margin: 20px 0;
+    .stTextInput>div>div>input {
+        background-color: #fff8e1;
+        color: #000;
     }
-    .stButton>button {
-        background-color: #43a047;
+    .stDownloadButton>button, .stButton>button {
+        background-color: #00897b;
         color: white;
+        border-radius: 12px;
         font-weight: bold;
-        border-radius: 10px;
-        padding: 0.6em 1em;
-        border: none;
+        transition: 0.3s;
     }
-    .stDownloadButton>button {
-        background-color: #e65100;
-        color: white;
-        font-weight: bold;
+    .stDownloadButton>button:hover, .stButton>button:hover {
+        background-color: #00695c;
+    }
+    .css-1cpxqw2, .css-ffhzg2 {
+        background-color: #ffffffaa !important;
+        padding: 10px;
         border-radius: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="title">🧬 Colorful DNA Motif & Perplexity Analyzer</div>', unsafe_allow_html=True)
-
-# ----------------------- Feature Functions -----------------------
+# ---------- Helper Functions ----------
 def calculate_perplexity(sequence, k=3):
     kmers = [sequence[i:i + k] for i in range(len(sequence) - k + 1)]
     kmer_counts = pd.Series(kmers).value_counts()
     total = sum(kmer_counts)
     probs = kmer_counts / total
     entropy = -sum(p * math.log2(p) for p in probs)
-    perplexity = 2 ** entropy
-    return perplexity
+    return 2 ** entropy
 
 def detect_g_quadruplex(seq):
     return len(re.findall(r'(G{3,}\w{1,7}){3,}G{3,}', seq))
@@ -96,52 +93,50 @@ def extract_features(seq):
         'length': len(seq)
     }
 
-# ----------------------- App Layout -----------------------
+# ---------- App UI ----------
+st.markdown('<div class="main">', unsafe_allow_html=True)
 
-with st.container():
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    
-    uploaded_file = st.file_uploader("📄 Upload a `.txt` file with DNA sequences (1 per line or with IDs)", type=["txt"])
+st.title("🧬 Colorful DNA Motif & Perplexity Analyzer")
+uploaded_file = st.file_uploader("📄 Upload your .txt file (1 DNA sequence per line or ID + sequence)", type=["txt"])
 
-    if uploaded_file:
-        st.success(f"✅ File uploaded: `{uploaded_file.name}`")
+if uploaded_file:
+    st.success(f"✅ File uploaded: `{uploaded_file.name}`")
 
-        content = uploaded_file.read().decode("utf-8").strip().splitlines()
-
-        records = []
-        for i, line in enumerate(content):
-            parts = line.strip().split()
-            if len(parts) >= 2:
-                seq_id, sequence = parts[0], ''.join(parts[1:])
-            else:
-                seq_id, sequence = f"Seq_{i+1}", parts[0]
-            records.append((seq_id, sequence))
-
-        feature_rows = []
-        for seq_id, sequence in records:
-            try:
-                features = extract_features(sequence)
-                features["ID"] = seq_id
-                feature_rows.append(features)
-            except Exception as e:
-                st.warning(f"⚠️ Error in {seq_id}: {e}")
-
-        if feature_rows:
-            df = pd.DataFrame(feature_rows)
-            clf = RandomForestClassifier()
-            dummy_X = df.drop(columns=["ID"])
-            clf.fit(dummy_X, [0] * len(df))
-            df["Predicted_Region"] = clf.predict(dummy_X)
-
-            st.subheader("📊 Motif & Perplexity Results")
-            st.dataframe(df, use_container_width=True)
-
-            st.download_button("📥 Download CSV", data=df.to_csv(index=False).encode("utf-8"),
-                               file_name="dna_results.csv", mime="text/csv")
+    content = uploaded_file.read().decode("utf-8").strip().splitlines()
+    records = []
+    for i, line in enumerate(content):
+        parts = line.strip().split()
+        if len(parts) >= 2:
+            seq_id, sequence = parts[0], ''.join(parts[1:])
         else:
-            st.warning("❗ No valid sequences found.")
+            seq_id, sequence = f"Seq_{i+1}", parts[0]
+        records.append((seq_id, sequence))
 
+    feature_rows = []
+    for seq_id, sequence in records:
+        try:
+            features = extract_features(sequence)
+            features["ID"] = seq_id
+            feature_rows.append(features)
+        except Exception as e:
+            st.warning(f"⚠️ Error in {seq_id}: {e}")
+
+    if feature_rows:
+        df = pd.DataFrame(feature_rows)
+        clf = RandomForestClassifier()
+        dummy_X = df.drop(columns=["ID"])
+        clf.fit(dummy_X, [0] * len(df))
+        df["Predicted_Region"] = clf.predict(dummy_X)
+
+        st.subheader("📊 Motif & Perplexity Results")
+        st.dataframe(df, use_container_width=True)
+
+        st.download_button("📥 Download Results CSV", data=df.to_csv(index=False).encode("utf-8"),
+                           file_name="dna_results.csv", mime="text/csv")
     else:
-        st.info("📝 Please upload a .txt file with DNA sequences to start.")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.warning("❗ No valid sequences found.")
+
+else:
+    st.info("📝 Upload a `.txt` file containing DNA sequences.")
+
+st.markdown('</div>', unsafe_allow_html=True)
