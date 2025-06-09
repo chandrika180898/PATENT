@@ -6,3 +6,5 @@ plotly
 reportlab
 matplotlib
 seaborn
+scikit-learn
+joblib
