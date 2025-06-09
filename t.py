@@ -3,10 +3,12 @@ import pandas as pd
 import re
 import math
 from sklearn.ensemble import RandomForestClassifier
+import altair as alt
+import pickle
 
 # ------------------------- PAGE CONFIG --------------------------
 st.set_page_config(
-    page_title="DNA Motif Analyzer",
+    page_title="Welcome to the DNA Motif & Perplexity Analyzer",
     layout="wide",
     page_icon="🧬"
 )
@@ -33,8 +35,19 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ------------------------- LOGIN --------------------------
+with st.sidebar:
+    st.markdown("### 🔐 Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    login_button = st.button("Login")
+
+if not (username == "admin" and password == "1234"):
+    st.warning("Please enter valid login credentials to access the tool.")
+    st.stop()
+
 # ------------------------- TABS --------------------------
-tabs = st.tabs(["🏠 Home", "📂 Analyze", "📊 Results", "📥 Download", "📞 Contact"])
+tabs = st.tabs(["🏠 Home", "📂 Analyze", "📊 Results", "📈 Insights", "💾 Save/Load", "📥 Download", "📞 Contact"])
 
 # ------------------------- HELPER FUNCTIONS --------------------------
 
@@ -73,10 +86,10 @@ def detect_tata_box(seq):
 def detect_direct_repeats(seq):
     return len(re.findall(r'(.{3,6})\1+', seq))
 
-def extract_features(seq):
+def extract_features(seq, k):
     seq = seq.upper()
     return {
-        'Perplexity': calculate_perplexity(seq),
+        'Perplexity': calculate_perplexity(seq, k=k),
         'G-Quadruplex': detect_g_quadruplex(seq),
         'Z-DNA': detect_z_dna(seq),
         'Cruciform': detect_cruciform(seq),
@@ -85,36 +98,32 @@ def extract_features(seq):
         'Sequence Length': len(seq)
     }
 
-# ------------------------- HOME PAGE --------------------------
+# ------------------------- HOME --------------------------
 with tabs[0]:
-    st.markdown("## 🧬 Welcome to the **DNA Motif & Perplexity Analyzer**")
+    st.markdown("## 🧬 Welcome to the DNA Motif & Perplexity Analyzer")
     st.markdown("""
-    This web-based tool is built for analyzing DNA sequences and detecting **non-B DNA structures**, 
-    calculating **perplexity**, and identifying key **regulatory motifs** such as:
-    
-    - 🔁 **Direct Repeats**
-    - 🧷 **G-Quadruplexes**
-    - 🔀 **Z-DNA**
-    - 🎯 **TATA Boxes**
-    - 🧬 **Cruciform Structures**
-
-    Navigate through the tabs above to start analyzing.
+    This tool helps detect:
+    - 🔁 Direct Repeats
+    - 🧷 G-Quadruplexes
+    - 🔀 Z-DNA
+    - 🎯 TATA Boxes
+    - 🧬 Cruciform Structures
+    Use the Analyze tab to start!
     """)
 
-# ------------------------- UPLOAD & ANALYZE --------------------------
+# ------------------------- ANALYZE --------------------------
 with tabs[1]:
     st.markdown("## 📂 Upload & Analyze DNA Sequences")
-
-    uploaded_file = st.file_uploader("📄 Upload a `.txt` file with sequences (one per line)", type=["txt"])
+    k_value = st.slider("🔢 Choose k-mer size for Perplexity", min_value=2, max_value=6, value=3)
+    uploaded_file = st.file_uploader("📄 Upload `.txt` or `.fasta` files", type=["txt", "fasta"])
 
     if uploaded_file:
         st.success(f"📁 File uploaded: `{uploaded_file.name}`")
-
         content = uploaded_file.read().decode("utf-8").strip().splitlines()
         records = []
-        for i, line in enumerate(content):
+        for line in content:
             line = line.strip()
-            if not line:
+            if not line or line.startswith(">"):
                 continue
             parts = line.split()
             seq_id = parts[0]
@@ -125,14 +134,14 @@ with tabs[1]:
             feature_rows = []
             for seq_id, sequence in records:
                 try:
-                    features = extract_features(sequence)
+                    features = extract_features(sequence, k_value)
                     features["ID"] = seq_id
                     feature_rows.append(features)
                 except Exception as e:
                     st.error(f"Error processing {seq_id}: {e}")
 
             df = pd.DataFrame(feature_rows)
-            df = df[["ID"] + [col for col in df.columns if col != "ID"]]  # Reorder
+            df = df[["ID"] + [col for col in df.columns if col != "ID"]]
 
             clf = RandomForestClassifier()
             clf.fit(df.drop(columns=["ID"]), [0]*len(df))
@@ -145,16 +154,66 @@ with tabs[1]:
 with tabs[2]:
     st.markdown("## 📊 Results Summary")
     if "results_df" in st.session_state:
-        selected_motif = st.selectbox("🔍 Filter by motif type", ["All"] + list(df.columns[1:-2]))
         df = st.session_state["results_df"]
+        selected_motif = st.selectbox("🔍 Filter by motif type", ["All"] + list(df.columns[1:-2]))
         if selected_motif != "All":
             df = df[df[selected_motif] > 0]
-        st.dataframe(df, use_container_width=True)
+
+        def color_motifs(val):
+            motif_icons = {
+                "G-Quadruplex": "🧷", "Z-DNA": "🔀", "TATA-Box": "🎯",
+                "Direct Repeats": "🔁", "Cruciform": "🧬"
+            }
+            return motif_icons.get(val, val)
+
+        styled_df = df.style.applymap(lambda val: 'color: red' if isinstance(val, (int, float)) and val > 5 else '')
+        st.dataframe(styled_df, use_container_width=True)
     else:
         st.warning("📂 Please upload and analyze sequences first.")
 
-# ------------------------- DOWNLOAD --------------------------
+# ------------------------- INSIGHTS --------------------------
 with tabs[3]:
+    st.markdown("## 📈 Motif & Perplexity Insights")
+    if "results_df" in st.session_state:
+        df = st.session_state["results_df"]
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### 🧬 Motif Frequency Chart")
+            melted = df.melt(id_vars=["ID", "Prediction"], value_vars=["G-Quadruplex", "Z-DNA", "TATA-Box", "Direct Repeats", "Cruciform"])
+            chart = alt.Chart(melted).mark_bar().encode(
+                x=alt.X("variable", title="Motif Type"),
+                y=alt.Y("sum(value)", title="Total Count"),
+                color="variable"
+            ).properties(height=300)
+            st.altair_chart(chart, use_container_width=True)
+
+        with col2:
+            st.markdown("### 📏 Sequence Length vs. Perplexity")
+            scatter = alt.Chart(df).mark_circle(size=60).encode(
+                x="Sequence Length",
+                y="Perplexity",
+                tooltip=["ID", "Perplexity", "Sequence Length"]
+            ).interactive()
+            st.altair_chart(scatter, use_container_width=True)
+    else:
+        st.warning("📂 Please upload and analyze sequences first.")
+
+# ------------------------- SAVE/LOAD --------------------------
+with tabs[4]:
+    st.markdown("## 💾 Save or Load Session")
+    if "results_df" in st.session_state:
+        buffer = pickle.dumps(st.session_state["results_df"])
+        st.download_button("💾 Save Analysis", data=buffer, file_name="session.pkl")
+        uploaded_pickle = st.file_uploader("📤 Upload Saved Session (.pkl)", type=["pkl"])
+        if uploaded_pickle:
+            st.session_state["results_df"] = pickle.load(uploaded_pickle)
+            st.success("🔄 Session restored! Check Results tab.")
+    else:
+        st.info("📂 Analyze data before saving or loading session.")
+
+# ------------------------- DOWNLOAD --------------------------
+with tabs[5]:
     st.markdown("## 📥 Download Your Results")
     if "results_df" in st.session_state:
         csv = st.session_state["results_df"].to_csv(index=False).encode("utf-8")
@@ -163,7 +222,7 @@ with tabs[3]:
         st.warning("📂 No data available to download yet.")
 
 # ------------------------- CONTACT --------------------------
-with tabs[4]:
+with tabs[6]:
     st.markdown("## 📞 Contact Information")
     st.markdown("""
     - 👨‍🔬 **Dr. Y V Rajesh**  
