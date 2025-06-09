@@ -4,7 +4,41 @@ import re
 import math
 from sklearn.ensemble import RandomForestClassifier
 
-# ----------------------- Helper Functions -----------------------
+# ------------------------- PAGE CONFIG --------------------------
+st.set_page_config(
+    page_title="DNA Motif Analyzer",
+    layout="wide",
+    page_icon="🧬"
+)
+
+# ------------------------- CSS Styling --------------------------
+st.markdown("""
+    <style>
+    .main {
+        background-color: #F0F2F6;
+    }
+    .css-1rs6os.edgvbvh3 {
+        font-size: 18px;
+    }
+    .block-container {
+        padding-top: 2rem;
+    }
+    .stDownloadButton {
+        background-color: #4CAF50;
+        color: white;
+        padding: 0.5em 1em;
+        border-radius: 8px;
+        text-align: center;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ------------------------- SIDEBAR --------------------------
+
+st.sidebar.title("🧭 Navigation")
+page = st.sidebar.radio("Choose Page", ["🏠 Home", "📂 Upload & Analyze", "📊 Results", "📥 Download Report", "📞 Contact"])
+
+# ------------------------- HELPER FUNCTIONS --------------------------
 
 def calculate_perplexity(sequence, k=3):
     kmers = [sequence[i:i + k] for i in range(len(sequence) - k + 1)]
@@ -12,16 +46,13 @@ def calculate_perplexity(sequence, k=3):
     total = sum(kmer_counts)
     probs = kmer_counts / total
     entropy = -sum(p * math.log2(p) for p in probs)
-    perplexity = 2 ** entropy
-    return perplexity
+    return 2 ** entropy
 
 def detect_g_quadruplex(seq):
-    pattern = r'(G{3,}\w{1,7}){3,}G{3,}'
-    return len(re.findall(pattern, seq))
+    return len(re.findall(r'(G{3,}\w{1,7}){3,}G{3,}', seq))
 
 def detect_z_dna(seq):
-    pattern = r'(CG){6,}'
-    return len(re.findall(pattern, seq))
+    return len(re.findall(r'(CG){6,}', seq))
 
 def reverse_complement(seq):
     complement = str.maketrans('ATGCatgc', 'TACGtacg')
@@ -47,110 +78,94 @@ def detect_direct_repeats(seq):
 def extract_features(seq):
     seq = seq.upper()
     return {
-        'perplexity': calculate_perplexity(seq),
-        'g_quadruplex': detect_g_quadruplex(seq),
-        'z_dna': detect_z_dna(seq),
-        'cruciform': detect_cruciform(seq),
-        'tata_box': detect_tata_box(seq),
-        'direct_repeats': detect_direct_repeats(seq),
-        'length': len(seq)
+        'Perplexity': calculate_perplexity(seq),
+        'G-Quadruplex': detect_g_quadruplex(seq),
+        'Z-DNA': detect_z_dna(seq),
+        'Cruciform': detect_cruciform(seq),
+        'TATA-Box': detect_tata_box(seq),
+        'Direct Repeats': detect_direct_repeats(seq),
+        'Sequence Length': len(seq)
     }
 
-# ----------------------- Sidebar Navigation -----------------------
+# ------------------------- PAGES --------------------------
 
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Upload & Analyze", "Results", "Download Report", "Contact"])
+if page == "🏠 Home":
+    st.markdown("## 🧬 Welcome to the **DNA Motif & Perplexity Analyzer**")
+    st.markdown("""
+    This web-based tool is built for analyzing DNA sequences and detecting **non-B DNA structures**, 
+    calculating **perplexity**, and identifying key **regulatory motifs** such as:
+    
+    - 🔁 **Direct Repeats**
+    - 🧷 **G-Quadruplexes**
+    - 🔀 **Z-DNA**
+    - 🎯 **TATA Boxes**
+    - 🧬 **Cruciform Structures**
 
-# ----------------------- Home -----------------------
-
-if page == "Home":
-    st.title("Welcome to DNA Motif & Perplexity Analyzer")
-    st.write("""
-        This tool helps analyze DNA sequences from TXT files to identify **Non-B DNA motifs**,
-        calculate sequence **perplexity**, and detect features like **G-quadruplex**, **Z-DNA**, **TATA boxes**, etc.
+    Go to **📂 Upload & Analyze** to begin!
     """)
 
-# ----------------------- Upload & Analyze -----------------------
+elif page == "📂 Upload & Analyze":
+    st.markdown("## 📂 Upload & Analyze DNA Sequences")
 
-elif page == "Upload & Analyze":
-    st.title("📄 Upload & Analyze TXT Sequences")
-
-    uploaded_file = st.file_uploader("📂 Upload a .txt file with DNA sequences", type=["txt"])
+    uploaded_file = st.file_uploader("📄 Upload a `.txt` file with sequences (one per line)", type=["txt"])
 
     if uploaded_file:
-        st.success(f"✅ Uploaded: {uploaded_file.name}")
+        st.success(f"📁 File uploaded: `{uploaded_file.name}`")
 
-        try:
-            content = uploaded_file.read().decode("utf-8").strip().splitlines()
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
-
+        content = uploaded_file.read().decode("utf-8").strip().splitlines()
         records = []
         for i, line in enumerate(content):
             line = line.strip()
             if not line:
                 continue
             parts = line.split()
-            if len(parts) >= 2:
-                seq_id = parts[0]
-                sequence = "".join(parts[1:])
-            else:
-                seq_id = f"Seq_{i+1}"
-                sequence = parts[0]
+            seq_id = parts[0]
+            sequence = "".join(parts[1:]) if len(parts) > 1 else parts[0]
             records.append((seq_id, sequence))
 
-        st.info(f"🔍 Found {len(records)} sequences")
+        with st.spinner("🔍 Extracting features..."):
+            feature_rows = []
+            for seq_id, sequence in records:
+                try:
+                    features = extract_features(sequence)
+                    features["ID"] = seq_id
+                    feature_rows.append(features)
+                except Exception as e:
+                    st.error(f"Error processing {seq_id}: {e}")
 
-        feature_rows = []
-        for seq_id, sequence in records:
-            try:
-                features = extract_features(sequence)
-                features["ID"] = seq_id
-                feature_rows.append(features)
-            except Exception as e:
-                st.error(f"Error processing sequence {seq_id}: {e}")
-
-        if feature_rows:
             df = pd.DataFrame(feature_rows)
+            df = df[["ID"] + [col for col in df.columns if col != "ID"]]  # Reorder
 
+            # Dummy ML prediction
             clf = RandomForestClassifier()
-            dummy_data = df.drop(columns=["ID"])
-            clf.fit(dummy_data, [0] * len(df))
-            predictions = clf.predict(dummy_data)
-            df["Predicted_Region"] = predictions
+            clf.fit(df.drop(columns=["ID"]), [0]*len(df))
+            df["Prediction"] = clf.predict(df.drop(columns=["ID"]))
 
             st.session_state["results_df"] = df
-            st.success("✅ Analysis complete! Go to 'Results' tab to view data.")
-        else:
-            st.warning("⚠️ No valid sequence records found.")
+            st.success("✅ Analysis complete! Check the 📊 Results tab.")
 
-# ----------------------- Results -----------------------
-
-elif page == "Results":
-    st.title("🔬 Analysis Results")
+elif page == "📊 Results":
+    st.markdown("## 📊 Results Summary")
     if "results_df" in st.session_state:
-        st.dataframe(st.session_state["results_df"])
+        st.dataframe(st.session_state["results_df"], use_container_width=True)
     else:
-        st.warning("⚠️ No analysis done yet. Please upload and analyze sequences first.")
+        st.warning("📂 Please upload and analyze sequences first.")
 
-# ----------------------- Download Report -----------------------
-
-elif page == "Download Report":
-    st.title("📥 Download Report")
+elif page == "📥 Download Report":
+    st.markdown("## 📥 Download Your Results")
     if "results_df" in st.session_state:
         csv = st.session_state["results_df"].to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Download Results as CSV", data=csv, file_name="txt_sequence_results.csv", mime="text/csv")
+        st.download_button("📥 Download as CSV", csv, file_name="motif_results.csv", mime="text/csv")
     else:
-        st.warning("⚠️ No data to download. Please analyze sequences first.")
+        st.warning("📂 No data available to download yet.")
 
-# ----------------------- Contact -----------------------
+elif page == "📞 Contact":
+    st.markdown("## 📞 Contact Information")
+    st.markdown("""
+    - 👨‍🔬 **Dr. Y V Rajesh**  
+      📧 yvrajesh_bt@kluniversity.in
 
-elif page == "Contact":
-    st.title("📞 Contact")
-    st.write("""
-    **Dr. Y V Rajesh**  
-    📧 Email: yvrajesh_bt@kluniversity.in  
-    
-    **G. Aruna Sesha Chandrika**  
-    📧 Email: chandrikagummadi1@gmail.com  
+    - 👩‍🔬 **G. Aruna Sesha Chandrika**  
+      📧 chandrikagummadi1@gmail.com
     """)
+
