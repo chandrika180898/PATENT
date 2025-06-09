@@ -23,9 +23,21 @@ def detect_z_dna(seq):
     pattern = r'(CG){6,}'
     return len(re.findall(pattern, seq))
 
-def detect_cruciform(seq):
-    pattern = r'(.{4,6})[ATGC]{0,10}\1[::-1]'
-    return len(re.findall(pattern, seq))
+# Instead of an invalid regex, use a logic-based method for detecting inverted repeats (cruciform)
+def reverse_complement(seq):
+    complement = str.maketrans('ATGCatgc', 'TACGtacg')
+    return seq.translate(complement)[::-1]
+
+def detect_cruciform(seq, min_len=4, max_len=6, spacer=10):
+    count = 0
+    seq = seq.upper()
+    for size in range(min_len, max_len + 1):
+        for i in range(len(seq) - 2 * size - spacer + 1):
+            left = seq[i:i+size]
+            right = seq[i+size+spacer:i+2*size+spacer]
+            if reverse_complement(left) == right:
+                count += 1
+    return count
 
 def detect_tata_box(seq):
     return len(re.findall(r'TATA[AT]A[AT]', seq))
@@ -54,16 +66,21 @@ uploaded_file = st.file_uploader("📂 Upload a .txt file with DNA sequences", t
 if uploaded_file:
     st.success(f"✅ Uploaded: {uploaded_file.name}")
 
-    content = uploaded_file.read().decode("utf-8").strip().splitlines()
-
+    try:
+        content = uploaded_file.read().decode("utf-8").strip().splitlines()
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+    
     records = []
     for i, line in enumerate(content):
         line = line.strip()
         if not line:
             continue
+        # Accept either "ID sequence" (two tokens) or just a sequence.
         parts = line.split()
-        if len(parts) == 2:
-            seq_id, sequence = parts
+        if len(parts) >= 2:
+            seq_id = parts[0]
+            sequence = "".join(parts[1:])  # In case sequence was split by whitespace.
         else:
             seq_id = f"Seq_{i+1}"
             sequence = parts[0]
@@ -73,21 +90,28 @@ if uploaded_file:
 
     feature_rows = []
     for seq_id, sequence in records:
-        features = extract_features(sequence)
-        features["ID"] = seq_id
-        feature_rows.append(features)
+        try:
+            features = extract_features(sequence)
+            features["ID"] = seq_id
+            feature_rows.append(features)
+        except Exception as e:
+            st.error(f"Error processing sequence {seq_id}: {e}")
 
-    df = pd.DataFrame(feature_rows)
+    if feature_rows:
+        df = pd.DataFrame(feature_rows)
 
-    clf = RandomForestClassifier()
-    dummy_data = df.drop(columns=["ID"])
-    clf.fit(dummy_data, [0] * len(df))
+        # Create a dummy classifier
+        clf = RandomForestClassifier()
+        dummy_data = df.drop(columns=["ID"])
+        clf.fit(dummy_data, [0] * len(df))  # Dummy training with label 0
 
-    predictions = clf.predict(dummy_data)
-    df["Predicted_Region"] = predictions
+        predictions = clf.predict(dummy_data)
+        df["Predicted_Region"] = predictions
 
-    st.subheader("🔬 Analysis Results")
-    st.dataframe(df)
+        st.subheader("🔬 Analysis Results")
+        st.dataframe(df)
 
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("📥 Download CSV", data=csv, file_name="txt_sequence_results.csv", mime="text/csv")
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Download Results as CSV", data=csv, file_name="txt_sequence_results.csv", mime="text/csv")
+    else:
+        st.warning("No valid sequence records found.")
