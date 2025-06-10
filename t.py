@@ -54,12 +54,12 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=1
 )
 
-login_data = authenticator.login("Login", location="main")
+name, authentication_status, username = authenticator.login("Login", location="main")
 
-if login_data is None or not isinstance(login_data, tuple) or len(login_data) != 3:
-    name = authentication_status = username = None
-else:
-    name, authentication_status, username = login_data
+if authentication_status is None:
+    st.warning("Please enter your username and password.")
+elif authentication_status is False:
+    st.error("Username or password is incorrect.")
 
 
 # ------------------------- EMAIL FUNCTION --------------------------
