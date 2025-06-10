@@ -44,7 +44,8 @@ with shelve.open("user_data") as db:
             }
         }
 
-credentials = shelve.open("user_data")["credentials"]
+with shelve.open("user_data") as db:
+    credentials = db["credentials"]
 
 authenticator = stauth.Authenticate(
     credentials,
@@ -74,7 +75,7 @@ def send_email(to_email, subject, content):
         st.error(f"Email error: {e}")
 
 # ------------------------- REGISTRATION --------------------------
-if not authentication_status:
+if authentication_status is False:
     with st.expander("Register Here"):
         new_user = st.text_input("Username")
         new_pass = st.text_input("Password", type="password")
@@ -197,7 +198,7 @@ if authentication_status:
         if history:
             st.markdown("### 📂 Your Analysis History")
             for idx, past in enumerate(history):
-                st.markdown(f"#### 🧾 Analysis #{idx + 1}")
+                st.markdown(f"#### 🗒️ Analysis #{idx + 1}")
                 st.dataframe(pd.DataFrame(past))
         else:
             st.warning("No history found.")
