@@ -1,14 +1,13 @@
-# ------------------------- AUTO-INSTALL streamlit-authenticator IF MISSING -------------------------
 import subprocess
 import sys
 
+# Install streamlit-authenticator if not present
 try:
     import streamlit_authenticator
 except ModuleNotFoundError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-authenticator"])
     import streamlit_authenticator
 
-# ------------------------- OTHER IMPORTS -------------------------
 import streamlit as st
 import pandas as pd
 import re
@@ -33,16 +32,15 @@ with shelve.open("user_data") as db:
             "usernames": {
                 "admin": {
                     "name": "Admin",
-                    "password": "admin123",  # In production, use hashed passwords!
+                    "password": "admin123",  # Use hashed passwords in production
                     "email": "admin@example.com"
                 }
             }
         }
 
 credentials = shelve.open("user_data")["credentials"]
-
 authenticator = Authenticate(credentials, "motif_app", "abcdef", cookie_expiry_days=1)
-name, authentication_status, username = authenticator.login("Login", "main")
+name, authentication_status, username = authenticator.login("Login", location="main")  # ✅ FIXED LINE
 
 # ------------------------- EMAIL FUNCTION --------------------------
 def send_email(to_email, subject, content):
@@ -160,7 +158,7 @@ if authentication_status:
 
             df = pd.DataFrame(feature_rows)
             clf = RandomForestClassifier()
-            clf.fit(df.drop(columns=["ID"]), [0]*len(df))
+            clf.fit(df.drop(columns=["ID"]), [0]*len(df))  # Dummy labels for now
             df["Prediction"] = clf.predict(df.drop(columns=["ID"]))
 
             # Store history
