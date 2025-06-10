@@ -56,7 +56,9 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=1
 )
 
-name, authentication_status, username = authenticator.login("Login", location="main")
+result = authenticator.login("Login", "main")
+st.write(result)
+
 
 if authentication_status is None:
     st.warning("Please enter your username and password.")
