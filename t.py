@@ -1,7 +1,5 @@
 import subprocess
 import sys
-pip install --upgrade streamlit-authenticator
-
 
 # Ensure streamlit-authenticator is installed
 try:
@@ -9,6 +7,8 @@ try:
 except ModuleNotFoundError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-authenticator"])
     import streamlit_authenticator as stauth
+
+
 
 import streamlit as st
 import pandas as pd
