@@ -1,12 +1,12 @@
 import subprocess
 import sys
 
-# Auto-install streamlit-authenticator if not installed
+# Ensure streamlit-authenticator is installed
 try:
-    import streamlit_authenticator
+    import streamlit_authenticator as stauth
 except ModuleNotFoundError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-authenticator"])
-    import streamlit_authenticator
+    import streamlit_authenticator as stauth
 
 import streamlit as st
 import pandas as pd
@@ -17,31 +17,43 @@ import shelve
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sklearn.ensemble import RandomForestClassifier
-from streamlit_authenticator import Authenticate
 
 # ------------------------- CONFIG --------------------------
 st.set_page_config(page_title="DNA Motif Analyzer", layout="wide", page_icon="🧬")
-st.markdown("""<style>.main {background-color: #F0F2F6;}</style>""", unsafe_allow_html=True)
+st.markdown("""
+    <style>
+    .main {
+        background-color: #F0F2F6;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # ------------------------- AUTH SETUP --------------------------
+import yaml
+from yaml.loader import SafeLoader
+
 with shelve.open("user_data") as db:
     if "credentials" not in db:
         db["credentials"] = {
             "usernames": {
                 "admin": {
                     "name": "Admin",
-                    "password": "admin123",  # Use hashed passwords in production
+                    "password": "admin123",
                     "email": "admin@example.com"
                 }
             }
         }
 
 credentials = shelve.open("user_data")["credentials"]
-authenticator = Authenticate(credentials, "motif_app", "abcdef", cookie_expiry_days=1)
 
-# ✅ Use positional "main" argument to avoid login type error
+authenticator = stauth.Authenticate(
+    credentials,
+    "motif_app",
+    "abcdef",
+    cookie_expiry_days=1
+)
+
 name, authentication_status, username = authenticator.login("Login", location="main")
-
 
 # ------------------------- EMAIL FUNCTION --------------------------
 def send_email(to_email, subject, content):
@@ -132,7 +144,7 @@ if authentication_status:
         st.title("🧬 DNA Motif & Perplexity Analyzer")
         st.markdown("""
         Analyze DNA sequences to detect non-B DNA structures and regulatory motifs:
-        - 🔁 Direct Repeats
+        - 🔀 Direct Repeats
         - 🧷 G-Quadruplexes
         - 🔀 Z-DNA
         - 🎯 TATA Boxes
@@ -162,7 +174,6 @@ if authentication_status:
             clf.fit(df.drop(columns=["ID"]), [0]*len(df))
             df["Prediction"] = clf.predict(df.drop(columns=["ID"]))
 
-            # Store history
             with shelve.open("user_history") as db:
                 if username not in db:
                     db[username] = []
