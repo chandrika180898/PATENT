@@ -40,7 +40,8 @@ credentials = shelve.open("user_data")["credentials"]
 authenticator = Authenticate(credentials, "motif_app", "abcdef", cookie_expiry_days=1)
 
 # ✅ Use positional "main" argument to avoid login type error
-name, authentication_status, username = authenticator.login("Login", "main")
+name, authentication_status, username = authenticator.login("Login", location="main")
+
 
 # ------------------------- EMAIL FUNCTION --------------------------
 def send_email(to_email, subject, content):
