@@ -54,7 +54,13 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=1
 )
 
-name, authentication_status, username = authenticator.login("Login", location="main")
+login_data = authenticator.login("Login", location="main")
+
+if login_data is None or not isinstance(login_data, tuple) or len(login_data) != 3:
+    name = authentication_status = username = None
+else:
+    name, authentication_status, username = login_data
+
 
 # ------------------------- EMAIL FUNCTION --------------------------
 def send_email(to_email, subject, content):
