@@ -1,5 +1,7 @@
 import subprocess
 import sys
+pip install --upgrade streamlit-authenticator
+
 
 # Ensure streamlit-authenticator is installed
 try:
