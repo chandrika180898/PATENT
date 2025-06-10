@@ -1,7 +1,7 @@
 import subprocess
 import sys
 
-# Install streamlit-authenticator if not present
+# Auto-install streamlit-authenticator if not installed
 try:
     import streamlit_authenticator
 except ModuleNotFoundError:
@@ -18,8 +18,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sklearn.ensemble import RandomForestClassifier
 from streamlit_authenticator import Authenticate
-import yaml
-from yaml.loader import SafeLoader
 
 # ------------------------- CONFIG --------------------------
 st.set_page_config(page_title="DNA Motif Analyzer", layout="wide", page_icon="🧬")
@@ -40,7 +38,9 @@ with shelve.open("user_data") as db:
 
 credentials = shelve.open("user_data")["credentials"]
 authenticator = Authenticate(credentials, "motif_app", "abcdef", cookie_expiry_days=1)
-name, authentication_status, username = authenticator.login("Login", location="main")  # ✅ FIXED LINE
+
+# ✅ Use positional "main" argument to avoid login type error
+name, authentication_status, username = authenticator.login("Login", "main")
 
 # ------------------------- EMAIL FUNCTION --------------------------
 def send_email(to_email, subject, content):
@@ -158,7 +158,7 @@ if authentication_status:
 
             df = pd.DataFrame(feature_rows)
             clf = RandomForestClassifier()
-            clf.fit(df.drop(columns=["ID"]), [0]*len(df))  # Dummy labels for now
+            clf.fit(df.drop(columns=["ID"]), [0]*len(df))
             df["Prediction"] = clf.predict(df.drop(columns=["ID"]))
 
             # Store history
