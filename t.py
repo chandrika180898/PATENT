@@ -1,3 +1,14 @@
+# ------------------------- AUTO-INSTALL streamlit-authenticator IF MISSING -------------------------
+import subprocess
+import sys
+
+try:
+    import streamlit_authenticator
+except ModuleNotFoundError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-authenticator"])
+    import streamlit_authenticator
+
+# ------------------------- OTHER IMPORTS -------------------------
 import streamlit as st
 import pandas as pd
 import re
@@ -8,15 +19,14 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sklearn.ensemble import RandomForestClassifier
 from streamlit_authenticator import Authenticate
+import yaml
+from yaml.loader import SafeLoader
 
 # ------------------------- CONFIG --------------------------
 st.set_page_config(page_title="DNA Motif Analyzer", layout="wide", page_icon="🧬")
 st.markdown("""<style>.main {background-color: #F0F2F6;}</style>""", unsafe_allow_html=True)
 
 # ------------------------- AUTH SETUP --------------------------
-import yaml
-from yaml.loader import SafeLoader
-
 with shelve.open("user_data") as db:
     if "credentials" not in db:
         db["credentials"] = {
