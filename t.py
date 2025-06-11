@@ -1,108 +1,69 @@
-import subprocess
-import sys
-
-# Ensure streamlit-authenticator is installed
-try:
-    import streamlit_authenticator as stauth
-except ModuleNotFoundError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-authenticator"])
-    import streamlit_authenticator as stauth
-
-
-
 import streamlit as st
 import pandas as pd
 import re
 import math
-import smtplib
-import shelve
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import hashlib
+import os
 from sklearn.ensemble import RandomForestClassifier
 
-# ------------------------- CONFIG --------------------------
-st.set_page_config(page_title="DNA Motif Analyzer", layout="wide", page_icon="🧬")
+# ------------------------- PAGE CONFIG --------------------------
+st.set_page_config(
+    page_title="DNA Motif Analyzer",
+    layout="wide",
+    page_icon="🧬"
+)
+
+# ------------------------- CSS Styling --------------------------
 st.markdown("""
     <style>
     .main {
         background-color: #F0F2F6;
     }
+    .block-container {
+        padding-top: 2rem;
+    }
+    .stDownloadButton {
+        background-color: #4CAF50;
+        color: white;
+        padding: 0.5em 1em;
+        border-radius: 8px;
+        text-align: center;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# ------------------------- AUTH SETUP --------------------------
-import yaml
-from yaml.loader import SafeLoader
+# ------------------------- AUTHENTICATION --------------------------
+USER_FILE = "users.csv"
 
-with shelve.open("user_data") as db:
-    if "credentials" not in db:
-        db["credentials"] = {
-            "usernames": {
-                "admin": {
-                    "name": "Admin",
-                    "password": "admin123",
-                    "email": "admin@example.com"
-                }
-            }
-        }
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-with shelve.open("user_data") as db:
-    credentials = db["credentials"]
+def load_users():
+    if not os.path.exists(USER_FILE):
+        return {}
+    df = pd.read_csv(USER_FILE)
+    return dict(zip(df.username, df.password))
 
-authenticator = stauth.Authenticate(
-    credentials,
-    "motif_app",
-    "abcdef",
-    cookie_expiry_days=1
-)
+def save_user(username, password):
+    hashed = hash_password(password)
+    if os.path.exists(USER_FILE):
+        df = pd.read_csv(USER_FILE)
+        df = pd.concat([df, pd.DataFrame({"username": [username], "password": [hashed]})])
+    else:
+        df = pd.DataFrame({"username": [username], "password": [hashed]})
+    df.to_csv(USER_FILE, index=False)
 
-result = authenticator.login("Login", "main")
-st.write(result)
+def authenticate(username, password, users):
+    return users.get(username) == hash_password(password)
 
+# ------------------------- SIDEBAR NAVIGATION --------------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-if authentication_status is None:
-    st.warning("Please enter your username and password.")
-elif authentication_status is False:
-    st.error("Username or password is incorrect.")
-
-
-# ------------------------- EMAIL FUNCTION --------------------------
-def send_email(to_email, subject, content):
-    from_email = "your_email@example.com"
-    password = "your_app_password"
-    msg = MIMEMultipart()
-    msg["From"] = from_email
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(content, "plain"))
-    try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(from_email, password)
-        server.send_message(msg)
-        server.quit()
-    except Exception as e:
-        st.error(f"Email error: {e}")
-
-# ------------------------- REGISTRATION --------------------------
-if authentication_status is False:
-    with st.expander("Register Here"):
-        new_user = st.text_input("Username")
-        new_pass = st.text_input("Password", type="password")
-        new_email = st.text_input("Email")
-        if st.button("Register"):
-            if new_user and new_pass and new_email:
-                credentials["usernames"][new_user] = {
-                    "name": new_user,
-                    "password": new_pass,
-                    "email": new_email
-                }
-                with shelve.open("user_data") as db:
-                    db["credentials"] = credentials
-                send_email(new_email, "DNA Motif Analyzer Registration", f"Welcome {new_user}! You’ve registered successfully.")
-                st.success("✅ Registered successfully. Please log in.")
-            else:
-                st.warning("All fields are required.")
+if not st.session_state.logged_in:
+    page = st.sidebar.radio("Choose Page", ["🔐 Login", "📝 Register"])
+else:
+    page = st.sidebar.radio("Choose Page", ["🏠 Home", "📂 Upload & Analyze", "📊 Results", "📥 Download Report", "📞 Contact", "🚪 Logout"])
 
 # ------------------------- HELPER FUNCTIONS --------------------------
 def calculate_perplexity(sequence, k=3):
@@ -113,8 +74,11 @@ def calculate_perplexity(sequence, k=3):
     entropy = -sum(p * math.log2(p) for p in probs)
     return 2 ** entropy
 
-def detect_g_quadruplex(seq): return len(re.findall(r'(G{3,}\w{1,7}){3,}G{3,}', seq))
-def detect_z_dna(seq): return len(re.findall(r'(CG){6,}', seq))
+def detect_g_quadruplex(seq):
+    return len(re.findall(r'(G{3,}\w{1,7}){3,}G{3,}', seq))
+
+def detect_z_dna(seq):
+    return len(re.findall(r'(CG){6,}', seq))
 
 def reverse_complement(seq):
     complement = str.maketrans('ATGCatgc', 'TACGtacg')
@@ -131,8 +95,11 @@ def detect_cruciform(seq, min_len=4, max_len=6, spacer=10):
                 count += 1
     return count
 
-def detect_tata_box(seq): return len(re.findall(r'TATA[AT]A[AT]', seq))
-def detect_direct_repeats(seq): return len(re.findall(r'(.{3,6})\1+', seq))
+def detect_tata_box(seq):
+    return len(re.findall(r'TATA[AT]A[AT]', seq))
+
+def detect_direct_repeats(seq):
+    return len(re.findall(r'(.{3,6})\1+', seq))
 
 def extract_features(seq):
     seq = seq.upper()
@@ -146,80 +113,131 @@ def extract_features(seq):
         'Sequence Length': len(seq)
     }
 
-# ------------------------- MAIN APP --------------------------
-if authentication_status:
-    st.sidebar.success(f"Welcome {name}!")
-    page = st.sidebar.radio("📁 Navigation", ["🏠 Home", "📂 Upload & Analyze", "📊 Results", "📜 History", "📞 Contact"])
+# ------------------------- PAGES --------------------------
 
-    if page == "🏠 Home":
-        st.title("🧬 DNA Motif & Perplexity Analyzer")
-        st.markdown("""
-        Analyze DNA sequences to detect non-B DNA structures and regulatory motifs:
-        - 🔀 Direct Repeats
-        - 🧷 G-Quadruplexes
-        - 🔀 Z-DNA
-        - 🎯 TATA Boxes
-        - 🧬 Cruciforms
-        """)
+if page == "🔐 Login":
+    st.title("🔐 Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        users = load_users()
+        if authenticate(username, password, users):
+            st.success("✅ Logged in successfully!")
+            st.session_state.logged_in = True
+            st.session_state.username = username
+            st.rerun()
+        else:
+            st.error("❌ Invalid credentials.")
 
-    elif page == "📂 Upload & Analyze":
-        uploaded_file = st.file_uploader("Upload `.txt` file with sequences (ID + sequence)", type=["txt"])
-        if uploaded_file:
-            content = uploaded_file.read().decode("utf-8").strip().splitlines()
-            records = []
-            for line in content:
-                if line.strip():
-                    parts = line.split()
-                    seq_id = parts[0]
-                    sequence = "".join(parts[1:]) if len(parts) > 1 else parts[0]
-                    records.append((seq_id, sequence))
+elif page == "📝 Register":
+    st.title("📝 Register")
+    username = st.text_input("Choose a Username")
+    password = st.text_input("Choose a Password", type="password")
+    confirm = st.text_input("Confirm Password", type="password")
+    if st.button("Register"):
+        if password != confirm:
+            st.error("❌ Passwords do not match.")
+        else:
+            users = load_users()
+            if username in users:
+                st.error("❌ Username already exists.")
+            else:
+                save_user(username, password)
+                st.success("✅ Registered successfully! You can now login.")
 
+elif page == "🚪 Logout":
+    st.session_state.logged_in = False
+    st.success("👋 You have been logged out.")
+    st.rerun()
+
+elif page == "🏠 Home":
+    if not st.session_state.get("logged_in", False):
+        st.warning("🔒 Please log in to access this page.")
+        st.stop()
+    st.markdown("## 🧬 Welcome to the **DNA Motif & Perplexity Analyzer**")
+    st.markdown("""
+    This web-based tool is built for analyzing DNA sequences and detecting **non-B DNA structures**, 
+    calculating **perplexity**, and identifying key **regulatory motifs** such as:
+    
+    - 🔁 **Direct Repeats**
+    - 🧷 **G-Quadruplexes**
+    - 🔀 **Z-DNA**
+    - 🎯 **TATA Boxes**
+    - 🧬 **Cruciform Structures**
+
+    Go to **📂 Upload & Analyze** to begin!
+    """)
+
+elif page == "📂 Upload & Analyze":
+    if not st.session_state.get("logged_in", False):
+        st.warning("🔒 Please log in to access this page.")
+        st.stop()
+
+    st.markdown("## 📂 Upload & Analyze DNA Sequences")
+    uploaded_file = st.file_uploader("📄 Upload a `.txt` file with sequences (one per line)", type=["txt"])
+
+    if uploaded_file:
+        st.success(f"📁 File uploaded: `{uploaded_file.name}`")
+
+        content = uploaded_file.read().decode("utf-8").strip().splitlines()
+        records = []
+        for i, line in enumerate(content):
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            seq_id = parts[0]
+            sequence = "".join(parts[1:]) if len(parts) > 1 else parts[0]
+            records.append((seq_id, sequence))
+
+        with st.spinner("🔍 Extracting features..."):
             feature_rows = []
             for seq_id, sequence in records:
-                features = extract_features(sequence)
-                features["ID"] = seq_id
-                feature_rows.append(features)
+                try:
+                    features = extract_features(sequence)
+                    features["ID"] = seq_id
+                    feature_rows.append(features)
+                except Exception as e:
+                    st.error(f"Error processing {seq_id}: {e}")
 
             df = pd.DataFrame(feature_rows)
+            df = df[["ID"] + [col for col in df.columns if col != "ID"]]  # Reorder
+
+            # Dummy ML prediction
             clf = RandomForestClassifier()
             clf.fit(df.drop(columns=["ID"]), [0]*len(df))
             df["Prediction"] = clf.predict(df.drop(columns=["ID"]))
 
-            with shelve.open("user_history") as db:
-                if username not in db:
-                    db[username] = []
-                db[username].append(df.to_dict())
-
             st.session_state["results_df"] = df
-            st.success("✅ Analysis complete. See results tab.")
+            st.success("✅ Analysis complete! Check the 📊 Results tab.")
 
-    elif page == "📊 Results":
-        if "results_df" in st.session_state:
-            df = st.session_state["results_df"]
-            st.dataframe(df, use_container_width=True)
-            st.markdown("### 🔢 Motif Count Summary:")
-            st.write(df.drop(columns=["ID", "Perplexity", "Sequence Length", "Prediction"]).sum())
-        else:
-            st.warning("No data available. Upload sequences first.")
+elif page == "📊 Results":
+    if not st.session_state.get("logged_in", False):
+        st.warning("🔒 Please log in to access this page.")
+        st.stop()
+    st.markdown("## 📊 Results Summary")
+    if "results_df" in st.session_state:
+        st.dataframe(st.session_state["results_df"], use_container_width=True)
+    else:
+        st.warning("📂 Please upload and analyze sequences first.")
 
-    elif page == "📜 History":
-        with shelve.open("user_history") as db:
-            history = db.get(username, [])
-        if history:
-            st.markdown("### 📂 Your Analysis History")
-            for idx, past in enumerate(history):
-                st.markdown(f"#### 🗒️ Analysis #{idx + 1}")
-                st.dataframe(pd.DataFrame(past))
-        else:
-            st.warning("No history found.")
+elif page == "📥 Download Report":
+    if not st.session_state.get("logged_in", False):
+        st.warning("🔒 Please log in to access this page.")
+        st.stop()
+    st.markdown("## 📥 Download Your Results")
+    if "results_df" in st.session_state:
+        csv = st.session_state["results_df"].to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Download as CSV", csv, file_name="motif_results.csv", mime="text/csv")
+    else:
+        st.warning("📂 No data available to download yet.")
 
-    elif page == "📞 Contact":
-        st.markdown("## 📞 Contact Information")
-        st.markdown("""
-        - 👨‍🔬 **Dr. Y V Rajesh**  
-          📧 yvrajesh_bt@kluniversity.in  
-        - 👩‍🔬 **G. Aruna Sesha Chandrika**  
-          📧 chandrikagummadi1@gmail.com
-        """)
-else:
-    st.warning("Please login or register to continue.")
+elif page == "📞 Contact":
+    st.markdown("## 📞 Contact Information")
+    st.markdown("""
+    👨‍🔬 **Dr. Y V Rajesh**  
+      📧 yvrajesh_bt@kluniversity.in
+
+    - 👩‍🔬 **G. Aruna Sesha Chandrika**  
+      📧 chandrikagummadi1@gmail.com
+    """)
