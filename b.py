@@ -5,6 +5,7 @@ import math
 import hashlib
 import os
 from sklearn.ensemble import RandomForestClassifier
+from datetime import datetime
 
 # ------------------------- PAGE CONFIG --------------------------
 st.set_page_config(
@@ -34,6 +35,7 @@ st.markdown("""
 
 # ------------------------- AUTHENTICATION --------------------------
 USER_FILE = "users.csv"
+HISTORY_DIR = "history"
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -46,26 +48,35 @@ def load_users():
 
 def save_user(username, password):
     hashed = hash_password(password)
+    df = pd.DataFrame({"username": [username], "password": [hashed]})
     if os.path.exists(USER_FILE):
-        df = pd.read_csv(USER_FILE)
-        df = pd.concat([df, pd.DataFrame({"username": [username], "password": [hashed]})])
-    else:
-        df = pd.DataFrame({"username": [username], "password": [hashed]})
+        df_existing = pd.read_csv(USER_FILE)
+        df = pd.concat([df_existing, df], ignore_index=True)
     df.to_csv(USER_FILE, index=False)
 
 def authenticate(username, password, users):
     return users.get(username) == hash_password(password)
 
-# ------------------------- USER DATA HANDLING --------------------------
-def save_user_data(username, df):
-    os.makedirs("user_data", exist_ok=True)
-    df.to_csv(f"user_data/{username}_results.csv", index=False)
+def log_user_history(username, filename, df):
+    os.makedirs(HISTORY_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    history_file = os.path.join(HISTORY_DIR, f"{username}_history.csv")
+    df_copy = df.copy()
+    df_copy.insert(0, "Filename", filename)
+    df_copy.insert(1, "Timestamp", timestamp)
 
-def load_user_data(username):
-    filepath = f"user_data/{username}_results.csv"
-    if os.path.exists(filepath):
-        return pd.read_csv(filepath)
-    return None
+    if os.path.exists(history_file):
+        df_existing = pd.read_csv(history_file)
+        df_copy = pd.concat([df_existing, df_copy], ignore_index=True)
+
+    df_copy.to_csv(history_file, index=False)
+
+def load_user_history(username):
+    history_file = os.path.join(HISTORY_DIR, f"{username}_history.csv")
+    if os.path.exists(history_file):
+        return pd.read_csv(history_file)
+    else:
+        return pd.DataFrame()
 
 # ------------------------- SIDEBAR NAVIGATION --------------------------
 if "logged_in" not in st.session_state:
@@ -74,9 +85,9 @@ if "logged_in" not in st.session_state:
 if not st.session_state.logged_in:
     page = st.sidebar.radio("Choose Page", ["🔐 Login", "📝 Register"])
 else:
-    page = st.sidebar.radio("Choose Page", ["🏠 Home", "📂 Upload & Analyze", "📊 Results", "📥 Download Report", "📞 Contact", "🚪 Logout"])
+    page = st.sidebar.radio("Choose Page", ["🏠 Home", "📂 Upload & Analyze", "📊 Results", "📥 Download Report", "🗂️ History", "📞 Contact", "🚪 Logout"])
 
-# ------------------------- HELPER FUNCTIONS --------------------------
+# ------------------------- FEATURE EXTRACTION --------------------------
 def calculate_perplexity(sequence, k=3):
     kmers = [sequence[i:i + k] for i in range(len(sequence) - k + 1)]
     kmer_counts = pd.Series(kmers).value_counts()
@@ -136,12 +147,6 @@ if page == "🔐 Login":
             st.success("✅ Logged in successfully!")
             st.session_state.logged_in = True
             st.session_state.username = username
-
-            # Load past results if available
-            user_df = load_user_data(username)
-            if user_df is not None:
-                st.session_state["results_df"] = user_df
-
             st.rerun()
         else:
             st.error("❌ Invalid credentials.")
@@ -173,16 +178,13 @@ elif page == "🏠 Home":
         st.stop()
     st.markdown("## 🧬 Welcome to the **DNA Motif & Perplexity Analyzer**")
     st.markdown("""
-    This web-based tool is built for analyzing DNA sequences and detecting **non-B DNA structures**, 
-    calculating **perplexity**, and identifying key **regulatory motifs** such as:
-    
+    Analyze DNA sequences for **non-B DNA structures**, calculate **perplexity**, and identify motifs such as:
+
     - 🔁 **Direct Repeats**
     - 🧷 **G-Quadruplexes**
     - 🔀 **Z-DNA**
     - 🎯 **TATA Boxes**
     - 🧬 **Cruciform Structures**
-
-    Go to **📂 Upload & Analyze** to begin!
     """)
 
 elif page == "📂 Upload & Analyze":
@@ -195,7 +197,6 @@ elif page == "📂 Upload & Analyze":
 
     if uploaded_file:
         st.success(f"📁 File uploaded: `{uploaded_file.name}`")
-
         content = uploaded_file.read().decode("utf-8").strip().splitlines()
         records = []
         for i, line in enumerate(content):
@@ -226,7 +227,9 @@ elif page == "📂 Upload & Analyze":
             df["Prediction"] = clf.predict(df.drop(columns=["ID"]))
 
             st.session_state["results_df"] = df
-            save_user_data(st.session_state["username"], df)
+
+            # Save history
+            log_user_history(st.session_state.username, uploaded_file.name, df)
 
             st.success("✅ Analysis complete! Check the 📊 Results tab.")
 
@@ -251,12 +254,23 @@ elif page == "📥 Download Report":
     else:
         st.warning("📂 No data available to download yet.")
 
+elif page == "🗂️ History":
+    if not st.session_state.get("logged_in", False):
+        st.warning("🔒 Please log in to access this page.")
+        st.stop()
+    st.markdown("## 🗂️ Past Upload History")
+    df_hist = load_user_history(st.session_state.username)
+    if df_hist.empty:
+        st.info("🕒 No history available yet.")
+    else:
+        st.dataframe(df_hist, use_container_width=True)
+
 elif page == "📞 Contact":
     st.markdown("## 📞 Contact Information")
     st.markdown("""
     👨‍🔬 **Dr. Y V Rajesh**  
       📧 yvrajesh_bt@kluniversity.in
 
-    - 👩‍🔬 **G. Aruna Sesha Chandrika**  
+    👩‍🔬 **G. Aruna Sesha Chandrika**  
       📧 chandrikagummadi1@gmail.com
     """)
