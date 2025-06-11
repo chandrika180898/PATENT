@@ -85,7 +85,7 @@ if "logged_in" not in st.session_state:
 if not st.session_state.logged_in:
     page = st.sidebar.radio("Choose Page", ["🔐 Login", "📝 Register"])
 else:
-    page = st.sidebar.radio("Choose Page", ["🏠 Home", "📂 Upload & Analyze", "📊 Results", "📥 Download Report", "🗂️ History", "📞 Contact", "🚪 Logout"])
+    page = st.sidebar.radio("Choose Page", ["🏠 Home", "📂 Upload & Analyze", "📊 Results", "📅 Download Report", "📂 History", "📞 Contact", "🚪 Logout"])
 
 # ------------------------- FEATURE EXTRACTION --------------------------
 def calculate_perplexity(sequence, k=3):
@@ -193,7 +193,7 @@ elif page == "📂 Upload & Analyze":
         st.stop()
 
     st.markdown("## 📂 Upload & Analyze DNA Sequences")
-    uploaded_file = st.file_uploader("📄 Upload a `.txt` file with sequences (one per line)", type=["txt"])
+    uploaded_file = st.file_uploader("📄 Upload a `.txt`, `.fna`, or `.fasta` file with sequences", type=["txt", "fna", "fasta"])
 
     if uploaded_file:
         st.success(f"📁 File uploaded: `{uploaded_file.name}`")
@@ -201,7 +201,7 @@ elif page == "📂 Upload & Analyze":
         records = []
         for i, line in enumerate(content):
             line = line.strip()
-            if not line:
+            if not line or line.startswith(">"):
                 continue
             parts = line.split()
             seq_id = parts[0]
@@ -219,16 +219,14 @@ elif page == "📂 Upload & Analyze":
                     st.error(f"Error processing {seq_id}: {e}")
 
             df = pd.DataFrame(feature_rows)
-            df = df[["ID"] + [col for col in df.columns if col != "ID"]]  # Reorder
+            df = df[["ID"] + [col for col in df.columns if col != "ID"]]
 
-            # Dummy ML prediction
             clf = RandomForestClassifier()
             clf.fit(df.drop(columns=["ID"]), [0]*len(df))
             df["Prediction"] = clf.predict(df.drop(columns=["ID"]))
 
             st.session_state["results_df"] = df
 
-            # Save history
             log_user_history(st.session_state.username, uploaded_file.name, df)
 
             st.success("✅ Analysis complete! Check the 📊 Results tab.")
@@ -243,22 +241,22 @@ elif page == "📊 Results":
     else:
         st.warning("📂 Please upload and analyze sequences first.")
 
-elif page == "📥 Download Report":
+elif page == "📅 Download Report":
     if not st.session_state.get("logged_in", False):
         st.warning("🔒 Please log in to access this page.")
         st.stop()
-    st.markdown("## 📥 Download Your Results")
+    st.markdown("## 📅 Download Your Results")
     if "results_df" in st.session_state:
         csv = st.session_state["results_df"].to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Download as CSV", csv, file_name="motif_results.csv", mime="text/csv")
+        st.download_button("📅 Download as CSV", csv, file_name="motif_results.csv", mime="text/csv")
     else:
         st.warning("📂 No data available to download yet.")
 
-elif page == "🗂️ History":
+elif page == "📂 History":
     if not st.session_state.get("logged_in", False):
         st.warning("🔒 Please log in to access this page.")
         st.stop()
-    st.markdown("## 🗂️ Past Upload History")
+    st.markdown("## 📂 Past Upload History")
     df_hist = load_user_history(st.session_state.username)
     if df_hist.empty:
         st.info("🕒 No history available yet.")
