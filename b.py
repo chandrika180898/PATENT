@@ -6,6 +6,16 @@ import hashlib
 import os
 from sklearn.ensemble import RandomForestClassifier
 from datetime import datetime
+# Restore previous session if available
+if os.path.exists("session.txt"):
+    with open("session.txt", "r") as f:
+        username = f.read().strip()
+    st.session_state.logged_in = True
+    st.session_state.username = username
+else:
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+
 
 # ------------------------- PAGE CONFIG --------------------------
 st.set_page_config(
