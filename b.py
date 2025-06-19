@@ -7,8 +7,6 @@ import os
 from sklearn.ensemble import RandomForestClassifier
 from datetime import datetime
 
-
-
 # ------------------------- PAGE CONFIG --------------------------
 st.set_page_config(
     page_title="DNA Motif Analyzer",
