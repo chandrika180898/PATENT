@@ -199,31 +199,38 @@ elif page == "📂 Upload & Analyze":
         st.success(f"📁 File uploaded: `{uploaded_file.name}`")
         content = uploaded_file.read().decode("utf-8").strip().splitlines()
         records = []
-        for i, line in enumerate(content):
-            line = line.strip()
-            if not line or line.startswith(">"):
-                continue
-            parts = line.split()
-            seq_id = parts[0]
-            sequence = "".join(parts[1:]) if len(parts) > 1 else parts[0]
-            records.append((seq_id, sequence))
+        current_seq = []
 
-        with st.spinner("🔍 Extracting features..."):
+        for line in content:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if current_seq:
+                    records.append("".join(current_seq))
+                current_seq = []
+            else:
+                current_seq.append(line)
+
+        if current_seq:
+            records.append("".join(current_seq))
+
+        st.info(f"🔍 Found {len(records)} sequences")
+
+        with st.spinner("🔬 Analyzing sequences..."):
             feature_rows = []
-            for seq_id, sequence in records:
+            for sequence in records:
                 try:
                     features = extract_features(sequence)
-                    features["ID"] = seq_id
                     feature_rows.append(features)
                 except Exception as e:
-                    st.error(f"Error processing {seq_id}: {e}")
+                    st.error(f"Error processing a sequence: {e}")
 
             df = pd.DataFrame(feature_rows)
-            df = df[["ID"] + [col for col in df.columns if col != "ID"]]
 
             clf = RandomForestClassifier()
-            clf.fit(df.drop(columns=["ID"]), [0]*len(df))
-            df["Prediction"] = clf.predict(df.drop(columns=["ID"]))
+            clf.fit(df, [0]*len(df))
+            df["Prediction"] = clf.predict(df)
 
             st.session_state["results_df"] = df
 
